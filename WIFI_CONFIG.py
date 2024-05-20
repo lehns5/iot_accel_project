@@ -1,2 +1,4 @@
-SSID = "my wifi hotspot name"
-PASSWORD = "wifi password"
+networks = [
+    ['domih', 'DomisPW1'],
+    ['Tripple L', '15263748']
+]
