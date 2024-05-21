@@ -14,10 +14,10 @@ import boot
 from ota import OTAUpdater
 
 #OTA
-SSID, PASSWORD = boot.connected_network
+"""SSID, PASSWORD = boot.connected_network
 firmware_url = "https://raw.githubusercontent.com/lehns5/iot_accel_project/main"
 ota_updater = OTAUpdater(SSID, PASSWORD, firmware_url, "main.py")
-ota_updater.download_and_install_update_if_available()
+ota_updater.download_and_install_update_if_available()"""
 
 #Sensor Setup
 i2c = SoftI2C(sda=Pin(23), scl=Pin(22), freq=400000)
