@@ -1,31 +1,30 @@
-# SETUP WIFI CONECTION
+# SETUP WIFI CONNECTION
 import network
 from time import sleep
-from WIFI_CONFIG import networks
 
-connected_network = None
+sta_if = network.WLAN(network.STA_IF)
+networks = [['domih', 'DomisPW1'], ['Tripple L', '15263748']]
+connected_network = None 
 
-def connect_to_wifi():
+def connect_to_network(ssid, password):
     global connected_network
-    sta_if = network.WLAN(network.STA_IF)
-    
-    if not sta_if.isconnected():
-        print('Connecting to network...')
-        for ssid, password in networks:
-            sta_if.active(True)
-            sta_if.connect(ssid, password)
-            for _ in range(10):
-                if sta_if.isconnected():
-                    break
-                sleep(1)
-            if sta_if.isconnected():
-                print(f'Connected to {ssid}')
-                connected_network = (ssid, password)
-                break
-        else:
-            print('Failed to connect to any network')
-    
-    if sta_if.isconnected():
-        print('Network config:', sta_if.ifconfig())
+    sta_if.active(True)
+    sta_if.disconnect()  # Vorherige Verbindungen abbrechen
+    sta_if.connect(ssid, password)
+    for _ in range(10):  # Versucht für 10 Sekunden eine Verbindung herzustellen
+        if sta_if.isconnected():
+            connected_network = (ssid, password)
+            return True
+        sleep(1)
+    return False
 
-connect_to_wifi()
+if not sta_if.isconnected():
+    print('Connecting to network...')
+    for ssid, password in networks:
+        if connect_to_network(ssid, password):
+            break
+
+if sta_if.isconnected():
+    print('Network config:', sta_if.ifconfig())
+else:
+    print('Unable to connect to any network.')
