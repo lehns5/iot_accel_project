@@ -25,7 +25,6 @@ mpu = MPU6050(i2c)
 
 #Pin setups
 led = Pin(13, Pin.OUT)
-button = Pin(21, Pin.IN, machine.Pin.PULL_UP)
 
 #mqtt setup
 SERVER ='hairdresser.cloudmqtt.com'
@@ -33,27 +32,29 @@ CLIENT_ID= ubinascii.hexlify(unique_id())
 PORT=15454 
 TOPIC_Sensor=b'MPU6050/w3r/hahld1/UID'
 TOPIC_CMD=b'CMD/Phone'
+TOPIC_Alarm=b'MPU6050/w3r/hahld1/ACCEL_ALARM'
 USERNAME = 'ebiswygf'
 PASSWORD = 'NUgfXT68DID3'
 
 #global variables
-test = 0
-alarm_level = 80
-send = False
+alarm_level = 80 #acceleration alarm level
+send = True #Determines if data is sent to broker or not
 accel_value = []  #List to store acceleration magnitudes
 filtered_data = [] # Accel Values Filtered with moving avg.
-offset_xyz=[-0.04,0,0.24] #Offsets for Sensor calibration
-state = 'record' #Initial State
+offset_xyz=[-0.04,0,0.17] #Offsets for Sensor calibration
+state = 'standby' #Initial State
 exercise_initialized = False #Exercise Initialization Flag
 repetitions = 0 #Repetitions
-axis = 'z'
-count = 1
-reps = 0
+axis = 'z'#determines if z axis or xyz axis are used
+count = 1 #global
+reps = 0 #numver of reps recorded
 increasing = False
 first_repetition = True
 max_value_first_repetition = 0
 max_value_current_repetition = 0
 current_max_accel = 0
+max_accel = 7.0 # Test variable, will be changed
+avg_accel = 6.0 # Test variable, will be changed
 
 # Parameters
 PEAK_WINDOW = 10
@@ -61,7 +62,7 @@ MOVEMENT_THRESHOLD = 0.5
 MOVEMENT_COUNT_THRESHOLD = 5
 THRESHOLD = 0.3
 WINDOW_SIZE = 5 # Number of Values that the mean is calculated over for filtered data
-frequency = 20 # Frequency in Hz that is recorded
+frequency = 100 # Frequency in Hz that is recorded
 transmitt_density = 10 # How many points transmitted per second of recording
 reduction_factor = (round(frequency/transmitt_density)) # factor for calculations
 
@@ -74,8 +75,6 @@ def mpu_data():
     az = mpu.accel.z
     return gx,gy,gz,ax,ay,az
 
-
-
 #threads
 def mqtt_thread():
     while True:
@@ -83,7 +82,6 @@ def mqtt_thread():
         time.sleep(1)
 
 #functions
-
 def reduce_data(data):
     data_red = []
     for i in range(math.floor(len(data)/reduction_factor)):
@@ -95,13 +93,24 @@ def get_accel(axis,values):
         accel = (values-1)*9.81
     return accel
 
-def send_data(Topic,data,max_accel,reps):
+def calibrate_sensor(axis):
+    if axis == 'z':
+        num_measurements = 10
+        value = 0
+        for i in range(num_measurements):
+            value+=mpu.accel.z
+    return round(1-(value/num_measurements),2)
+
+def send_data(Topic,data,max,avg,reps):
     json_data = {
-    'data': data,
-    'max_accel': max_accel,
+    'max_accel': max,
+    'avg_accel': avg,
     'reps': reps}
     payload = ujson.dumps(json_data)
     client.publish(Topic, payload)
+
+def send_mqtt(topic, message):
+    client.publish(topic, message)
 
 def moving_average(accel_value):
     if len(accel_value)-WINDOW_SIZE >0:
@@ -147,16 +156,17 @@ def standby():
 
 #subs
 def subs(topic, msg):
-    global state,count,alarm_level, first_repetition, reps
+    global state,count,alarm_level, first_repetition, reps, offset_xyz
     data = ujson.loads(msg)
     if data["msg"] == "record":
         if state == "record":
             pass
         else:
-            state = "record"
-            alarm_level = data["alarm"]
+            if "alarm" in data:
+                alarm_level = int(data["alarm"])
             first_repetition = True
             reps = 0
+            state = "record"
             print(alarm_level)
             print(state)
     elif data["msg"] == "standby":
@@ -168,8 +178,11 @@ def subs(topic, msg):
             print('sent data',reduce_data(filtered_data))
             print(state)
             if send == True:
-                send_data(TOPIC_Sensor,reduce_data(filtered_data),test,test)
-
+                send_data(TOPIC_Sensor,reduce_data(filtered_data),max_accel,avg_accel,reps)
+    elif data["msg"] == "calibrate":
+        if axis == 'z':
+            offset_xyz[2] = calibrate_sensor('z')
+            print('z-offset set to:', offset_xyz[2])
 
 def detect_peaks_troughs(current_value, previous_value):
     global reps, exercise_initialized, peak_detected, movement_count, max_accel_first_rep, current_max_accel
@@ -203,12 +216,12 @@ def detect_peaks_troughs(current_value, previous_value):
 
             if movement_count == 2:
                 if current_max_accel < THRESHOLD:
-                    print("Max acceleration of current repetition below threshold, switching to standby")
+                    print("Best progress reached!")
                     print("Max acceleration last repetition: ", current_max_accel)
+                    reps += 1
                     exercise_initialized = False
                     movement_count = 0
-                    state = 'standby'
-                    #Erst in Standby wenn Stopp geschickt wird, hier Meldung an node-rode dass Value erreicht.
+                    send_mqtt(TOPIC_Alarm, "on")
                 else:
                     reps += 1
                     print(current_max_accel)
@@ -223,19 +236,6 @@ def detect_peaks_troughs(current_value, previous_value):
                 THRESHOLD = (max_accel_first_rep * alarm_level) / 100
                 print("Threshold set to:", THRESHOLD)
 
-
-"""
-    # Apply moving average filter
-    filtered_accel = moving_average(accel_data, new_accel)
-    # Detect peaks and troughs
-    detect_peaks_troughs(filtered_accel, prev_value)
-    # Update previous value
-    prev_value = filtered_accel
-    # Increment index for moving average buffer
-    index += 1
-    # Small delay to control the sampling rate
-    time.sleep(0.01)"""
-
 client=MQTTClient(CLIENT_ID,SERVER,PORT, USERNAME, PASSWORD)
 client.set_callback(subs)
 client.connect()
@@ -243,7 +243,6 @@ print("Connected to %s, subscribed to %s topic" % (SERVER, TOPIC_CMD))
 client.subscribe(TOPIC_CMD)
 
 _thread.start_new_thread(mqtt_thread, ())
-#_thread.start_new_thread(reps, ())
 _thread.start_new_thread(mpu_data, ())
 
 while True:
