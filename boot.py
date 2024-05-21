@@ -9,9 +9,9 @@ connected_network = None
 def connect_to_network(ssid, password):
     global connected_network
     sta_if.active(True)
-    sta_if.disconnect()  # Vorherige Verbindungen abbrechen
+    sta_if.disconnect()  #Disconnect previous connection
     sta_if.connect(ssid, password)
-    for _ in range(10):  # Versucht für 10 Sekunden eine Verbindung herzustellen
+    for _ in range(10):  #Try to connect to a network in 10s
         if sta_if.isconnected():
             connected_network = (ssid, password)
             return True
