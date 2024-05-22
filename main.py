@@ -14,10 +14,10 @@ import boot
 from ota import OTAUpdater
 
 #OTA
-SSID, PASSWORD = boot.connected_network
+"""SSID, PASSWORD = boot.connected_network
 firmware_url = "https://raw.githubusercontent.com/lehns5/iot_accel_project/main"
 ota_updater = OTAUpdater(SSID, PASSWORD, firmware_url, "main.py")
-ota_updater.download_and_install_update_if_available()
+ota_updater.download_and_install_update_if_available()"""
 
 #Sensor Setup
 i2c = SoftI2C(sda=Pin(23), scl=Pin(22), freq=400000)
@@ -101,7 +101,7 @@ def calibrate_sensor(axis):
             value+=mpu.accel.z
     return round(1-(value/num_measurements),2)
 
-def send_data(Topic,data,max,avg,reps):
+def send_data(Topic,max,avg,reps):
     json_data = {
     'max_accel': max,
     'avg_accel': avg,
@@ -178,11 +178,12 @@ def subs(topic, msg):
             print('sent data',reduce_data(filtered_data))
             print(state)
             if send == True:
-                send_data(TOPIC_Sensor,reduce_data(filtered_data),max_accel,avg_accel,reps)
+                send_data(TOPIC_Sensor,max_accel,avg_accel,reps)
     elif data["msg"] == "calibrate":
         if axis == 'z':
             offset_xyz[2] = calibrate_sensor('z')
             print('z-offset set to:', offset_xyz[2])
+            send_mqtt(TOPIC_Alarm, "calibrated")
 
 def detect_peaks_troughs(current_value, previous_value):
     global reps, exercise_initialized, peak_detected, movement_count, max_accel_first_rep, current_max_accel
