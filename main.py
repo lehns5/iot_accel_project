@@ -84,6 +84,21 @@ def mqtt_thread():
         time.sleep(1)
 
 #functions
+def led_blink():
+    while True:
+        if state == 'record':
+            led(1)
+            sleep_ms(200)
+            led(0)
+            sleep_ms(800)
+        elif state == 'standby':
+            led(1)
+        elif state == 'calibrate':
+            led(1)
+            sleep_ms(150)
+            led(0)
+            sleep_ms(150)
+
 def reduce_data(data):
     data_red = []
     for i in range(math.floor(len(data)/reduction_factor)):
@@ -261,6 +276,7 @@ client.subscribe(TOPIC_CMD)
 
 _thread.start_new_thread(mqtt_thread, ())
 _thread.start_new_thread(mpu_data, ())
+_thread.start_new_thread(led_blink, ())
 
 while True:
     if state == 'record':
