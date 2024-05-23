@@ -53,16 +53,18 @@ first_repetition = True
 max_value_first_repetition = 0
 max_value_current_repetition = 0
 current_max_accel = 0
-max_accel = 7.0 # Test variable, will be changed
-avg_accel = 6.0 # Test variable, will be changed
+max_accel = 0 # Test variable, will be changed
+avg_accel = 0 # Test variable, will be changed
+firs_three_reps = []
+current_max_accel_list = []
 
 # Parameters
 PEAK_WINDOW = 10
-MOVEMENT_THRESHOLD = 0.5
+MOVEMENT_THRESHOLD = 1
 MOVEMENT_COUNT_THRESHOLD = 5
 THRESHOLD = 0.3
 WINDOW_SIZE = 5 # Number of Values that the mean is calculated over for filtered data
-frequency = 100 # Frequency in Hz that is recorded
+frequency = 20 # Frequency in Hz that is recorded
 transmitt_density = 10 # How many points transmitted per second of recording
 reduction_factor = (round(frequency/transmitt_density)) # factor for calculations
 
@@ -136,6 +138,9 @@ def record(axis):
         accel_value.append(((count * (1000 / frequency)) / 1000, accel))  # appends a tuple (time in second, acceleration value)
         if len(accel_value) >= WINDOW_SIZE:
             filtered_data.append((((count - math.floor(WINDOW_SIZE / 2)) * (1000 / frequency)) / 1000, moving_average(accel_value)))
+        if len(filtered_data) > MOVEMENT_COUNT_THRESHOLD:
+            filtered_data.pop(0)
+
         count += 1
         
         if len(filtered_data) > 1:
@@ -156,7 +161,7 @@ def standby():
 
 #subs
 def subs(topic, msg):
-    global state,count,alarm_level, first_repetition, reps, offset_xyz
+    global state,count,alarm_level, first_repetition, reps, offset_xyz, current_max_accel_list, firs_three_reps
     data = ujson.loads(msg)
     if data["msg"] == "record":
         if state == "record":
@@ -166,6 +171,8 @@ def subs(topic, msg):
                 alarm_level = int(data["alarm"])
             first_repetition = True
             reps = 0
+            firs_three_reps = []
+            current_max_accel_list = []
             state = "record"
             print(alarm_level)
             print(state)
@@ -187,7 +194,9 @@ def subs(topic, msg):
 
 def detect_peaks_troughs(current_value, previous_value):
     global reps, exercise_initialized, peak_detected, movement_count, max_accel_first_rep, current_max_accel
-    global MOVEMENT_THRESHOLD, MOVEMENT_COUNT_THRESHOLD, THRESHOLD, alarm_level, state
+    global MOVEMENT_THRESHOLD, MOVEMENT_COUNT_THRESHOLD, THRESHOLD, alarm_level, state, max_accel, avg_accel
+    global firs_three_reps
+    global current_max_accel_list
 
     # Check if movement has started
     if not exercise_initialized and abs(current_value) > MOVEMENT_THRESHOLD and len(filtered_data) >= MOVEMENT_COUNT_THRESHOLD:
@@ -215,27 +224,34 @@ def detect_peaks_troughs(current_value, previous_value):
             print("End of peak detected")
             print("Movement count:", movement_count)
 
+            if reps < 3 and movement_count == 1:
+                firs_three_reps.append(current_max_accel)
+                print(firs_three_reps)
+                if len(firs_three_reps) == 3:
+                    max_accel = sum(firs_three_reps) / len(firs_three_reps)
+                    print("Max acceleration first three reps: ", max_accel)
+                    THRESHOLD = (max_accel * alarm_level) / 100
+                    print("Threshold set to:", THRESHOLD)
+
             if movement_count == 2:
-                if current_max_accel < THRESHOLD:
-                    print("Best progress reached!")
-                    print("Max acceleration last repetition: ", current_max_accel)
+                current_max_accel_list.append(current_max_accel)
+                print(current_max_accel_list)
+                avg_accel = sum(current_max_accel_list) / len(current_max_accel_list)
+                print(avg_accel)
+                if current_max_accel < THRESHOLD and reps > 3:
                     reps += 1
                     exercise_initialized = False
                     movement_count = 0
+                    print("Best progress reached!")
+                    print(avg_accel)
+                    print(reps)
                     send_mqtt(TOPIC_Alarm, "on")
                 else:
                     reps += 1
-                    print(current_max_accel)
                     print("Reps:", reps)
                     movement_count = 0  # Reset for next repetition
                     current_max_accel = 0
 
-            # Update max acceleration values
-            if movement_count == 1:
-                max_accel_first_rep = max(max_accel_first_rep, current_max_accel)
-                print("Max acceleration of first repetition:", max_accel_first_rep)
-                THRESHOLD = (max_accel_first_rep * alarm_level) / 100
-                print("Threshold set to:", THRESHOLD)
 
 client=MQTTClient(CLIENT_ID,SERVER,PORT, USERNAME, PASSWORD)
 client.set_callback(subs)
