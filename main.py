@@ -57,6 +57,8 @@ max_accel = 0 # Test variable, will be changed
 avg_accel = 0 # Test variable, will be changed
 firs_three_reps = []
 current_max_accel_list = []
+target_reps = 12
+target_stat = "both"
 
 # Parameters
 PEAK_WINDOW = 10
@@ -176,20 +178,34 @@ def standby():
 
 #subs
 def subs(topic, msg):
-    global state,count,alarm_level, first_repetition, reps, offset_xyz, current_max_accel_list, firs_three_reps
+    global state,count,alarm_level, first_repetition, reps, offset_xyz, current_max_accel_list, firs_three_reps, target_reps, target_stat
     data = ujson.loads(msg)
     if data["msg"] == "record":
         if state == "record":
             pass
         else:
-            if "alarm" in data:
+            if data["alarm"] != "" and data["reps"] == "":
                 alarm_level = int(data["alarm"])
+                target_stat = "alarm"
+            elif data["reps"] != "" and data["alarm"] == "":
+                target_reps = int(data["reps"])
+                target_stat = "reps"
+            elif (data["reps"] != "") and (data["alarm"] != ""):
+                alarm_level = int(data["alarm"])
+                target_reps = int(data["reps"])
+                target_stat = "both"
+            elif(data["reps"] == "") and (data["alarm"] == ""):
+                target_reps = 12
+                alarm_level = 80
+                target_stat = "both"
             first_repetition = True
             reps = 0
             firs_three_reps = []
             current_max_accel_list = []
             state = "record"
+            print(target_stat)
             print(alarm_level)
+            print(target_reps)
             print(state)
     elif data["msg"] == "standby":
         if state == "standby":
@@ -253,7 +269,23 @@ def detect_peaks_troughs(current_value, previous_value):
                 print(current_max_accel_list)
                 avg_accel = sum(current_max_accel_list) / len(current_max_accel_list)
                 print(avg_accel)
-                if current_max_accel < THRESHOLD and reps > 3:
+                if current_max_accel < THRESHOLD and reps > 3 and target_stat == "alarm":
+                    reps += 1
+                    exercise_initialized = False
+                    movement_count = 0
+                    print("Best progress reached!")
+                    print(avg_accel)
+                    print(reps)
+                    send_mqtt(TOPIC_Alarm, "on")
+                elif (reps == (target_reps-1)) and (target_stat == "reps"):
+                    reps += 1
+                    exercise_initialized = False
+                    movement_count = 0
+                    print("Best progress reached!")
+                    print(avg_accel)
+                    print(reps)
+                    send_mqtt(TOPIC_Alarm, "on")
+                elif ((current_max_accel < THRESHOLD and reps > 3) or (reps == target_reps)) and (target_stat == "both"):
                     reps += 1
                     exercise_initialized = False
                     movement_count = 0
