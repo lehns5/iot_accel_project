@@ -161,11 +161,7 @@ def record(axis):
         count += 1
         
         if len(filtered_data) > 1:
-            detect_peaks_troughs(filtered_data[-1][1], filtered_data[-2][1])
-        
-        # Print current acceleration
-        #if len(filtered_data) > 0:
-            #print(accel_value[-1], filtered_data[-1])
+            detect_peaks_troughs(filtered_data[-1][1])
 
         sleep_ms(int(1000 / frequency))
 
@@ -223,7 +219,7 @@ def subs(topic, msg):
             print('z-offset set to:', offset_xyz[2])
             send_mqtt(TOPIC_Alarm, "calibrated")
 
-def detect_peaks_troughs(current_value, previous_value):
+def detect_peaks_troughs(current_value):
     global reps, exercise_initialized, peak_detected, movement_count, max_accel_first_rep, current_max_accel
     global MOVEMENT_THRESHOLD, MOVEMENT_COUNT_THRESHOLD, THRESHOLD, alarm_level, state, max_accel, avg_accel
     global firs_three_reps
@@ -285,7 +281,7 @@ def detect_peaks_troughs(current_value, previous_value):
                     print(avg_accel)
                     print(reps)
                     send_mqtt(TOPIC_Alarm, "on")
-                elif ((current_max_accel < THRESHOLD and reps > 3) or (reps == target_reps)) and (target_stat == "both"):
+                elif ((current_max_accel < THRESHOLD and reps > 3) or (reps == (target_reps-1))) and (target_stat == "both"):
                     reps += 1
                     exercise_initialized = False
                     movement_count = 0
