@@ -62,7 +62,7 @@ target_stat = "both"
 
 # Parameters
 PEAK_WINDOW = 10
-MOVEMENT_THRESHOLD = 1
+MOVEMENT_THRESHOLD = 1.5
 MOVEMENT_COUNT_THRESHOLD = 5
 THRESHOLD = 0.3
 WINDOW_SIZE = 5 # Number of Values that the mean is calculated over for filtered data
@@ -167,9 +167,10 @@ def record(axis):
 
 
 def standby():
-    global accel, state, reps, max_value_current_repetition, first_repetition
+    global accel, state, reps, max_value_current_repetition, first_repetition, filtered_data
     led(1)
     accel_value.clear()  # Clear the accel
+    filtered_data.clear()
     state = 'standby'
 
 #subs
