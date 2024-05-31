@@ -24,7 +24,17 @@ i2c = SoftI2C(sda=Pin(23), scl=Pin(22), freq=400000)
 mpu = MPU6050(i2c)
 
 #Pin setups
+#pwm = machine.PWM(machine.Pin(13), freq=1000)
 led = Pin(13, Pin.OUT)
+green_led = Pin(17, Pin.OUT)
+yellow_led = Pin(16, Pin.OUT)
+
+
+# Variables to store the current brightness level
+brightness = 0
+fade_amount = 10  # Adjust this for faster fading
+interval = 0.01  # Adjust this for a smoother 
+fade = 'in'
 
 #mqtt setup
 SERVER ='hairdresser.cloudmqtt.com'
@@ -37,6 +47,7 @@ USERNAME = 'ebiswygf'
 PASSWORD = 'NUgfXT68DID3'
 
 #global variables
+setup_time = 10
 alarm_level = 80 #acceleration alarm level
 send = True #Determines if data is sent to broker or not
 accel_value = []  #List to store acceleration magnitudes
@@ -87,19 +98,29 @@ def mqtt_thread():
 
 #functions
 def led_blink():
+    global brightness, fade_amount, fade
     while True:
         if state == 'record':
-            led(1)
-            sleep_ms(200)
             led(0)
-            sleep_ms(800)
+            yellow_led(0)
+            green_led(1)
+            time.sleep_ms(200)
+            green_led(0)
+            time.sleep_ms(800)
         elif state == 'standby':
             led(1)
         elif state == 'calibrate':
             led(1)
-            sleep_ms(150)
+            time.sleep_ms(150)
             led(0)
-            sleep_ms(150)
+            time.sleep_ms(150)
+        elif state == 'setup':
+            led(0)
+            green_led(0)
+            yellow_led(1)
+        else:
+            led(0)
+            time.sleep(0.1)
 
 def reduce_data(data):
     data_red = []
@@ -142,7 +163,6 @@ def moving_average(accel_value):
 
 def record(axis):
     global count, accel_value
-    led(0)
     if axis == 'z':
         if len(accel_value) > WINDOW_SIZE:
             accel_value.pop(0)
@@ -168,16 +188,18 @@ def record(axis):
 
 def standby():
     global accel, state, reps, max_value_current_repetition, first_repetition, filtered_data
-    led(1)
     accel_value.clear()  # Clear the accel
     filtered_data.clear()
     state = 'standby'
 
 #subs
 def subs(topic, msg):
-    global state,count,alarm_level, first_repetition, reps, offset_xyz, current_max_accel_list, firs_three_reps, target_reps, target_stat
+    global setup_time,state,count,alarm_level, first_repetition, reps, offset_xyz, current_max_accel_list, firs_three_reps, target_reps, target_stat
     data = ujson.loads(msg)
     if data["msg"] == "record":
+        setup_time = int(data["setup"])
+        state = 'setup'
+        sleep(setup_time)
         if state == "record":
             pass
         else:
@@ -304,7 +326,6 @@ print("Connected to %s, subscribed to %s topic" % (SERVER, TOPIC_CMD))
 client.subscribe(TOPIC_CMD)
 
 _thread.start_new_thread(mqtt_thread, ())
-_thread.start_new_thread(mpu_data, ())
 _thread.start_new_thread(led_blink, ())
 
 while True:
