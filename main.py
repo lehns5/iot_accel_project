@@ -74,12 +74,12 @@ target_stat = "both"
 # Parameters
 PEAK_WINDOW = 10
 MOVEMENT_THRESHOLD = 1.5
-MOVEMENT_COUNT_THRESHOLD = 5
+MOVEMENT_COUNT_THRESHOLD = 10
 THRESHOLD = 0.3
 WINDOW_SIZE = 5 # Number of Values that the mean is calculated over for filtered data
-frequency = 20 # Frequency in Hz that is recorded
-transmitt_density = 10 # How many points transmitted per second of recording
-reduction_factor = (round(frequency/transmitt_density)) # factor for calculations
+frequency = 50 # Frequency in Hz that is recorded
+#transmitt_density = 10 # How many points transmitted per second of recording
+#reduction_factor = (round(frequency/transmitt_density)) # factor for calculations
 
 def mpu_data():
     gx = mpu.gyro.x
@@ -109,24 +109,22 @@ def led_blink():
             time.sleep_ms(800)
         elif state == 'standby':
             led(1)
+            green_led(0)
+            yellow_led(0)
         elif state == 'calibrate':
             led(1)
-            time.sleep_ms(150)
-            led(0)
-            time.sleep_ms(150)
+            green_led(1)
+            yellow_led(1)
         elif state == 'setup':
             led(0)
             green_led(0)
             yellow_led(1)
-        else:
-            led(0)
-            time.sleep(0.1)
 
-def reduce_data(data):
+"""def reduce_data(data):
     data_red = []
     for i in range(math.floor(len(data)/reduction_factor)):
         data_red.append(data[i*reduction_factor])
-    return data_red
+    return data_red"""
 
 def get_accel(axis,values):
     if axis == 'z':
@@ -135,7 +133,7 @@ def get_accel(axis,values):
 
 def calibrate_sensor(axis):
     if axis == 'z':
-        num_measurements = 10
+        num_measurements = 20
         value = 0
         for i in range(num_measurements):
             value+=mpu.accel.z
@@ -203,17 +201,17 @@ def subs(topic, msg):
         if state == "record":
             pass
         else:
-            if data["alarm"] != "" and data["reps"] == "":
+            if data["alarm"] != "0" and data["reps"] == "0":
                 alarm_level = int(data["alarm"])
                 target_stat = "alarm"
-            elif data["reps"] != "" and data["alarm"] == "":
+            elif data["reps"] != "0" and data["alarm"] == "0":
                 target_reps = int(data["reps"])
                 target_stat = "reps"
-            elif (data["reps"] != "") and (data["alarm"] != ""):
+            elif (data["reps"] != "0") and (data["alarm"] != "0"):
                 alarm_level = int(data["alarm"])
                 target_reps = int(data["reps"])
                 target_stat = "both"
-            elif(data["reps"] == "") and (data["alarm"] == ""):
+            elif(data["reps"] == "0") and (data["alarm"] == "0"):
                 target_reps = 12
                 alarm_level = 80
                 target_stat = "both"
@@ -232,15 +230,17 @@ def subs(topic, msg):
         else:
             state = "standby"
             count == 0
-            print('sent data',reduce_data(filtered_data))
+#            print('sent data',reduce_data(filtered_data))
             print(state)
             if send == True:
-                send_data(TOPIC_Sensor,max_accel,avg_accel,reps)
+                send_data(TOPIC_Sensor,round(max_accel,2),round(avg_accel,2),reps)
     elif data["msg"] == "calibrate":
+        state = 'calibrate'
         if axis == 'z':
             offset_xyz[2] = calibrate_sensor('z')
             print('z-offset set to:', offset_xyz[2])
             send_mqtt(TOPIC_Alarm, "calibrated")
+            state = 'standby'
 
 def detect_peaks_troughs(current_value):
     global reps, exercise_initialized, peak_detected, movement_count, max_accel_first_rep, current_max_accel
