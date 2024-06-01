@@ -11,13 +11,9 @@ import ubinascii
 import _thread
 import vector3d
 import boot
-from ota import OTAUpdater
 
-#OTA
-"""SSID, PASSWORD = boot.connected_network
-firmware_url = "https://raw.githubusercontent.com/lehns5/iot_accel_project/main"
-ota_updater = OTAUpdater(SSID, PASSWORD, firmware_url, "main.py")
-ota_updater.download_and_install_update_if_available()"""
+
+
 
 #Sensor Setup
 i2c = SoftI2C(sda=Pin(23), scl=Pin(22), freq=400000)
@@ -48,26 +44,21 @@ filtered_data = [] # Accel Values Filtered with moving avg.
 offset_xyz=[-0.04,0,0.17] #Offsets for Sensor calibration
 state = 'standby' #Initial State
 exercise_initialized = False #Exercise Initialization Flag
-repetitions = 0 #Repetitions
 axis = 'z'#determines if z axis or xyz axis are used
 count = 1 #global
 reps = 0 #numver of reps recorded
-increasing = False
 first_repetition = True
-max_value_first_repetition = 0
-max_value_current_repetition = 0
 current_max_accel = 0
-max_accel = 0 # Test variable, will be changed
-avg_accel = 0 # Test variable, will be changed
-firs_three_reps = []
-current_max_accel_list = []
-target_reps = 12
-target_stat = "both"
+max_accel = 0 #Max accel of the first 3 reps sending to node-red
+avg_accel = 0 #Avg accel for sending to node-red
+firs_three_reps = [] #List to safe the max accel of first 3 reps
+current_max_accel_list = [] #List to safe the max accel of every rep
+target_reps = 12 #Default value
+target_stat = "both" #Default Value
 
-# Parameters
-PEAK_WINDOW = 10
-MOVEMENT_THRESHOLD = 1.5
-MOVEMENT_COUNT_THRESHOLD = 10
+#Parameters that can be changed for deeper specification of the training
+MOVEMENT_THRESHOLD = 1.5 #Acceleration threashold to detect a movement
+MOVEMENT_COUNT_THRESHOLD = 10 #Number of values that need in the movement threashold to detect a turning point
 THRESHOLD = 0.3
 WINDOW_SIZE = 5 # Number of Values that the mean is calculated over for filtered data
 frequency = 50 # Frequency in Hz that is recorded
@@ -89,7 +80,6 @@ def mqtt_thread():
 
 #functions
 def led_blink():
-    global brightness, fade_amount, fade
     while True:
         if state == 'record':
             ob_led(0)
@@ -170,7 +160,7 @@ def record(axis):
 
 
 def standby():
-    global accel, state, reps, max_value_current_repetition, first_repetition, filtered_data
+    global accel_value, state, reps, first_repetition, filtered_data
     accel_value.clear()  # Clear the accel
     filtered_data.clear()
     state = 'standby'
@@ -228,10 +218,11 @@ def subs(topic, msg):
 
 def detect_peaks_troughs(current_value):
     global reps, exercise_initialized, peak_detected, movement_count, max_accel_first_rep, current_max_accel
-    global MOVEMENT_THRESHOLD, MOVEMENT_COUNT_THRESHOLD, THRESHOLD, alarm_level, state, max_accel, avg_accel
+    global MOVEMENT_THRESHOLD, MOVEMENT_COUNT_THRESHOLD, THRESHOLD, alarm_level, max_accel, avg_accel
     global firs_three_reps
     global current_max_accel_list
 
+    check_accel = 0
     # Check if movement has started
     if not exercise_initialized and abs(current_value) > MOVEMENT_THRESHOLD and len(filtered_data) >= MOVEMENT_COUNT_THRESHOLD:
         exercise_initialized = True
@@ -264,15 +255,15 @@ def detect_peaks_troughs(current_value):
                 if len(firs_three_reps) == 3:
                     max_accel = sum(firs_three_reps) / len(firs_three_reps)
                     print("Max acceleration first three reps: ", max_accel)
-                    THRESHOLD = (max_accel * alarm_level) / 100
+                    THRESHOLD = round((max_accel * alarm_level) / 100, 1)
                     print("Threshold set to:", THRESHOLD)
 
             if movement_count == 2:
                 current_max_accel_list.append(current_max_accel)
+                check_accel = round(current_max_accel, 1)
                 print(current_max_accel_list)
                 avg_accel = sum(current_max_accel_list) / len(current_max_accel_list)
-                print(avg_accel)
-                if current_max_accel < THRESHOLD and reps > 3 and target_stat == "alarm":
+                if ((check_accel <= THRESHOLD) and (reps > 2) and (target_stat == "alarm")):
                     reps += 1
                     exercise_initialized = False
                     movement_count = 0
@@ -288,7 +279,7 @@ def detect_peaks_troughs(current_value):
                     print(avg_accel)
                     print(reps)
                     send_mqtt(TOPIC_Alarm, "on")
-                elif ((current_max_accel < THRESHOLD and reps > 3) or (reps == (target_reps-1))) and (target_stat == "both"):
+                elif (((check_accel <= THRESHOLD) and (reps > 2)) or (reps == (target_reps-1))) and (target_stat == "both"):
                     reps += 1
                     exercise_initialized = False
                     movement_count = 0
