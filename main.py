@@ -25,16 +25,9 @@ mpu = MPU6050(i2c)
 
 #Pin setups
 #pwm = machine.PWM(machine.Pin(13), freq=1000)
-led = Pin(13, Pin.OUT)
+ob_led = Pin(13, Pin.OUT)
 green_led = Pin(17, Pin.OUT)
 yellow_led = Pin(16, Pin.OUT)
-
-
-# Variables to store the current brightness level
-brightness = 0
-fade_amount = 10  # Adjust this for faster fading
-interval = 0.01  # Adjust this for a smoother 
-fade = 'in'
 
 #mqtt setup
 SERVER ='hairdresser.cloudmqtt.com'
@@ -78,8 +71,6 @@ MOVEMENT_COUNT_THRESHOLD = 10
 THRESHOLD = 0.3
 WINDOW_SIZE = 5 # Number of Values that the mean is calculated over for filtered data
 frequency = 50 # Frequency in Hz that is recorded
-#transmitt_density = 10 # How many points transmitted per second of recording
-#reduction_factor = (round(frequency/transmitt_density)) # factor for calculations
 
 def mpu_data():
     gx = mpu.gyro.x
@@ -101,30 +92,24 @@ def led_blink():
     global brightness, fade_amount, fade
     while True:
         if state == 'record':
-            led(0)
+            ob_led(0)
             yellow_led(0)
             green_led(1)
             time.sleep_ms(200)
             green_led(0)
             time.sleep_ms(800)
         elif state == 'standby':
-            led(1)
+            ob_led(1)
             green_led(0)
             yellow_led(0)
         elif state == 'calibrate':
-            led(1)
+            ob_led(1)
             green_led(1)
             yellow_led(1)
         elif state == 'setup':
-            led(0)
+            ob_led(0)
             green_led(0)
             yellow_led(1)
-
-"""def reduce_data(data):
-    data_red = []
-    for i in range(math.floor(len(data)/reduction_factor)):
-        data_red.append(data[i*reduction_factor])
-    return data_red"""
 
 def get_accel(axis,values):
     if axis == 'z':
@@ -230,7 +215,6 @@ def subs(topic, msg):
         else:
             state = "standby"
             count == 0
-#            print('sent data',reduce_data(filtered_data))
             print(state)
             if send == True:
                 send_data(TOPIC_Sensor,round(max_accel,2),round(avg_accel,2),reps)
