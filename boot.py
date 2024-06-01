@@ -3,7 +3,7 @@ import network
 from time import sleep
 
 sta_if = network.WLAN(network.STA_IF)
-networks = [['domih', 'DomisPW1'], ['Tripple L', '15263748']]
+networks = ""
 connected_network = None 
 
 def connect_to_network(ssid, password):
