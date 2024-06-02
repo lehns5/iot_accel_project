@@ -1,17 +1,14 @@
 import machine
-import array
 from imu import MPU6050
 from machine import Pin, SoftI2C, unique_id
 import time
-from time import sleep, sleep_ms
+from time import sleep_ms
 import math
 from umqttsimple import MQTTClient 
 import ujson
 import ubinascii
 import _thread
 import vector3d
-import boot
-
 
 
 
@@ -20,7 +17,6 @@ i2c = SoftI2C(sda=Pin(23), scl=Pin(22), freq=400000)
 mpu = MPU6050(i2c)
 
 #Pin setups
-#pwm = machine.PWM(machine.Pin(13), freq=1000)
 ob_led = Pin(13, Pin.OUT)
 green_led = Pin(17, Pin.OUT)
 yellow_led = Pin(16, Pin.OUT)
@@ -36,7 +32,7 @@ USERNAME = 'ebiswygf'
 PASSWORD = 'NUgfXT68DID3'
 
 #global variables
-setup_time = 10
+setup_time = 5 #setup time before record starts
 alarm_level = 80 #acceleration alarm level
 send = True #Determines if data is sent to broker or not
 accel_value = []  #List to store acceleration magnitudes
@@ -46,7 +42,7 @@ state = 'standby' #Initial State
 exercise_initialized = False #Exercise Initialization Flag
 axis = 'z'#determines if z axis or xyz axis are used
 count = 1 #global
-reps = 0 #numver of reps recorded
+reps = 0 #number of reps recorded
 first_repetition = True
 current_max_accel = 0
 max_accel = 0 #Max accel of the first 3 reps sending to node-red
@@ -61,7 +57,7 @@ MOVEMENT_THRESHOLD = 1.5 #Acceleration threashold to detect a movement
 MOVEMENT_COUNT_THRESHOLD = 10 #Number of values that need in the movement threashold to detect a turning point
 THRESHOLD = 0.3
 WINDOW_SIZE = 5 # Number of Values that the mean is calculated over for filtered data
-frequency = 50 # Frequency in Hz that is recorded
+FREQUENCY = 50 # Frequency in Hz that is recorded
 
 def mpu_data():
     gx = mpu.gyro.x
@@ -76,7 +72,7 @@ def mpu_data():
 def mqtt_thread():
     while True:
         client.check_msg()
-        time.sleep(1)
+        time.sleep_ms(100)
 
 #functions
 def led_blink():
@@ -145,9 +141,9 @@ def record(axis):
         
         # Get magnitude and add to list
         accel = round(get_accel('z', g), 1)
-        accel_value.append(((count * (1000 / frequency)) / 1000, accel))  # appends a tuple (time in second, acceleration value)
+        accel_value.append(((count * (1000 / FREQUENCY)) / 1000, accel))  # appends a tuple (time in second, acceleration value)
         if len(accel_value) >= WINDOW_SIZE:
-            filtered_data.append((((count - math.floor(WINDOW_SIZE / 2)) * (1000 / frequency)) / 1000, moving_average(accel_value)))
+            filtered_data.append((((count - math.floor(WINDOW_SIZE / 2)) * (1000 / FREQUENCY)) / 1000, moving_average(accel_value)))
         if len(filtered_data) > MOVEMENT_COUNT_THRESHOLD:
             filtered_data.pop(0)
 
@@ -156,7 +152,7 @@ def record(axis):
         if len(filtered_data) > 1:
             detect_peaks_troughs(filtered_data[-1][1])
 
-        sleep_ms(int(1000 / frequency))
+        sleep_ms(int(1000 / FREQUENCY))
 
 
 def standby():
@@ -172,7 +168,7 @@ def subs(topic, msg):
     if data["msg"] == "record":
         setup_time = int(data["setup"])
         state = 'setup'
-        sleep(setup_time)
+        sleep_ms(setup_time*1000)
         if state == "record":
             pass
         else:
